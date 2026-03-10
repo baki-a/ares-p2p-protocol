@@ -168,4 +168,58 @@ public class AresComUtilsTest {
             file.delete();
         }
     }
+
+
+    @Test
+    public void test_server_file_request_and_response() throws IOException {
+        File file = new File("test_server_file.bin");
+        try {
+            file.createNewFile();
+            AresComUtils aresComUtils = new AresComUtils(new FileInputStream(file), new FileOutputStream(file));
+
+            // --- PROVA 0x08 ---
+            String expectedFilename = "video.mp4";
+            int expectedTransferId = 12345;
+            String expectedReqId = "C1";
+
+            aresComUtils.writeServerFileRequest(expectedFilename, expectedTransferId, expectedReqId);
+
+            assertEquals(AresComUtils.OPCODE_SERVER_FILE_REQUEST, aresComUtils.getDataInputStream().readByte());
+
+            String[] actualFilename = new String[1];
+            int[] actualTransferId = new int[1];
+            String[] actualReqId = new String[1];
+
+            aresComUtils.readServerFileRequest(actualFilename, actualTransferId, actualReqId);
+
+            assertEquals(expectedFilename, actualFilename[0]);
+            assertEquals(expectedTransferId, actualTransferId[0]);
+            assertEquals(expectedReqId, actualReqId[0]);
+
+            // --- PROVA 0x09 ---
+            byte expectedStatus = 0x00;
+            long expectedSize = 5000000L;
+            byte[] expectedHash = new byte[32];
+            expectedHash[0] = 7; // Valor de prova per assegurar que no es perd
+
+            aresComUtils.writeServerFileResponse(expectedStatus, expectedTransferId, expectedFilename, expectedSize, expectedHash);
+
+            assertEquals(AresComUtils.OPCODE_SERVER_FILE_RESPONSE, aresComUtils.getDataInputStream().readByte());
+
+            byte[] actualStatus = new byte[1];
+            long[] actualSize = new long[1];
+            byte[][] actualHash = new byte[1][];
+
+            aresComUtils.readServerFileResponse(actualStatus, actualTransferId, actualFilename, actualSize, actualHash);
+
+            assertEquals(expectedStatus, actualStatus[0]);
+            assertEquals(expectedTransferId, actualTransferId[0]);
+            assertEquals(expectedFilename, actualFilename[0]);
+            assertEquals(expectedSize, actualSize[0]);
+            assertEquals(expectedHash[0], actualHash[0][0]);
+
+        } finally {
+            file.delete();
+        }
+    }
 }

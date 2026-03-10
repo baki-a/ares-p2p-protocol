@@ -196,4 +196,147 @@ public class AresComUtils extends ComUtils {
         }
         return results;
     }
+
+
+    // --- FASE DE DESCÀRREGA: Sol·licitud i Resposta (0x06 i 0x07) ---
+    public static final byte OPCODE_DOWNLOAD_REQUEST = 0x06;
+    public static final byte OPCODE_DOWNLOAD_RESPONSE = 0x07;
+
+    /**
+     * Escriptura 0x06: Client demana un fitxer
+     */
+    public void writeDownloadRequest(String filename, String sourceClientId) throws IOException {
+        getDataOutputStream().writeByte(OPCODE_DOWNLOAD_REQUEST);
+        write_int32(filename.length());
+        write_string(filename);
+
+        // El document exigeix 2 bytes per al Source Client ID
+        String idFixed = sourceClientId;
+        if (idFixed.length() < 2) idFixed = (idFixed + "  ").substring(0, 2);
+        else idFixed = idFixed.substring(0, 2);
+        write_string(idFixed);
+    }
+
+    /**
+     * Lectura 0x06
+     */
+    public void readDownloadRequest(String[] outFilename, String[] outSourceClientId) throws IOException {
+        int filenameLength = read_int32();
+        outFilename[0] = read_string(filenameLength);
+        outSourceClientId[0] = read_string(2); // 2 bytes fixos
+    }
+
+    /**
+     * Escriptura 0x07: Servidor respon al client si pot començar la transferència
+     */
+    public void writeDownloadResponse(byte status, String filename, long fileSize, String sourceClientId, int transferId) throws IOException {
+        getDataOutputStream().writeByte(OPCODE_DOWNLOAD_RESPONSE);
+        getDataOutputStream().writeByte(status); // 0x00 OK, 0x01 Not Found, 0x02 Unavailable
+
+        write_int32(filename.length());
+        if (filename.length() > 0) {
+            write_string(filename);
+        }
+
+        getDataOutputStream().writeLong(fileSize);
+
+        // 2 bytes per l'ID de l'origen
+        String idFixed = sourceClientId;
+        if (idFixed.length() < 2) idFixed = (idFixed + "  ").substring(0, 2);
+        else idFixed = idFixed.substring(0, 2);
+        write_string(idFixed);
+
+        write_int32(transferId);
+    }
+
+    /**
+     * Lectura 0x07
+     */
+    public void readDownloadResponse(byte[] outStatus, String[] outFilename, long[] outFileSize, String[] outSourceClientId, int[] outTransferId) throws IOException {
+        outStatus[0] = getDataInputStream().readByte();
+
+        int filenameLength = read_int32();
+        if (filenameLength > 0) {
+            outFilename[0] = read_string(filenameLength);
+        } else {
+            outFilename[0] = "";
+        }
+
+        outFileSize[0] = getDataInputStream().readLong();
+        outSourceClientId[0] = read_string(2);
+        outTransferId[0] = read_int32();
+    }
+
+
+    // FASE DE DESCÀRREGA: Peticions al Client Origen (0x08 i 0x09) ---
+    public static final byte OPCODE_SERVER_FILE_REQUEST = 0x08;
+    public static final byte OPCODE_SERVER_FILE_RESPONSE = 0x09;
+
+    /**
+     * Escriptura 0x08: Servidor demana fitxer al client origen
+     */
+    public void writeServerFileRequest(String filename, int transferId, String requestingClientId) throws IOException {
+        getDataOutputStream().writeByte(OPCODE_SERVER_FILE_REQUEST);
+
+        write_int32(filename.length());
+        write_string(filename);
+        write_int32(transferId);
+
+        // 2 bytes per al Requesting Client ID
+        String idFixed = requestingClientId;
+        if (idFixed.length() < 2) idFixed = (idFixed + "  ").substring(0, 2);
+        else idFixed = idFixed.substring(0, 2);
+        write_string(idFixed);
+    }
+
+    /**
+     * Lectura 0x08
+     */
+    public void readServerFileRequest(String[] outFilename, int[] outTransferId, String[] outRequestingClientId) throws IOException {
+        int len = read_int32();
+        outFilename[0] = read_string(len);
+        outTransferId[0] = read_int32();
+        outRequestingClientId[0] = read_string(2);
+    }
+
+    /**
+     * Escriptura 0x09: Client origen respon al servidor
+     */
+    public void writeServerFileResponse(byte status, int transferId, String filename, long fileSize, byte[] fileHash) throws IOException {
+        getDataOutputStream().writeByte(OPCODE_SERVER_FILE_RESPONSE);
+        getDataOutputStream().writeByte(status);
+        write_int32(transferId);
+
+        write_int32(filename.length());
+        if (filename.length() > 0) {
+            write_string(filename);
+        }
+
+        getDataOutputStream().writeLong(fileSize);
+
+        // El document diu que si l'status no és 0x00, el hash són tots zeros
+        if (fileHash != null && fileHash.length == 32) {
+            getDataOutputStream().write(fileHash, 0, 32);
+        } else {
+            getDataOutputStream().write(new byte[32], 0, 32);
+        }
+    }
+
+    /**
+     * Lectura 0x09
+     */
+    public void readServerFileResponse(byte[] outStatus, int[] outTransferId, String[] outFilename, long[] outFileSize, byte[][] outFileHash) throws IOException {
+        outStatus[0] = getDataInputStream().readByte();
+        outTransferId[0] = read_int32();
+
+        int len = read_int32();
+        if (len > 0) {
+            outFilename[0] = read_string(len);
+        } else {
+            outFilename[0] = "";
+        }
+
+        outFileSize[0] = getDataInputStream().readLong();
+        outFileHash[0] = read_bytes(32);
+    }
 }

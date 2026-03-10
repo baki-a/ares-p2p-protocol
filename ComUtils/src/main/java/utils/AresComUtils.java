@@ -109,4 +109,91 @@ public class AresComUtils extends ComUtils {
         outClientId[0] = read_string(2);
         outChunkSize[0] = read_int32();
     }
+
+    // NOU MISSATGE: SEARCH_REQUEST (0x04)
+    public static final byte OPCODE_SEARCH_REQUEST = 0x04;
+
+    /**
+     * Escriptura del missatge 0x04 (Client -> Servidor)
+     */
+    public void writeSearchRequest(String searchQuery) throws IOException {
+        getDataOutputStream().writeByte(OPCODE_SEARCH_REQUEST);
+
+        // Enviem la longitud de la paraula i després la paraula en si
+        write_int32(searchQuery.length());
+        write_string(searchQuery);
+    }
+
+    /**
+     * Lectura del missatge 0x04 (Servidor <- Client)
+     */
+    public String readSearchRequest() throws IOException {
+        // Llegim la longitud per saber quants caràcters hem d'agafar
+        int length = read_int32();
+        return read_string(length);
+    }
+
+
+    // --- NOU MISSATGE: SEARCH_RESPONSE (0x05) ---
+    public static final byte OPCODE_SEARCH_RESPONSE = 0x05;
+
+    /**
+     * Escriptura del missatge 0x05 (Servidor -> Client)
+     */
+    public void writeSearchResponse(java.util.List<AresSearchResult> results) throws java.io.IOException {
+        getDataOutputStream().writeByte(OPCODE_SEARCH_RESPONSE);
+
+        // 1. Quants resultats únics (fitxers) hem trobat?
+        write_int32(results.size());
+
+        for (AresSearchResult result : results) {
+            // 2. Dades del fitxer
+            AresFile file = result.getFile();
+            write_int32(file.getFilename().length());
+            write_string(file.getFilename());
+            getDataOutputStream().writeLong(file.getFileSize());
+            getDataOutputStream().write(file.getFileHash(), 0, 32);
+
+            // 3. Quants usuaris tenen aquest fitxer?
+            java.util.List<String> peers = result.getPeers();
+            write_int32(peers.size());
+
+            // 4. Llista d'usuaris
+            for (String peer : peers) {
+                write_int32(peer.length());
+                write_string(peer);
+            }
+        }
+    }
+
+    /**
+     * Lectura del missatge 0x05 (Client <- Servidor)
+     */
+    public java.util.List<AresSearchResult> readSearchResponse() throws java.io.IOException {
+        java.util.List<AresSearchResult> results = new java.util.ArrayList<>();
+
+        // Llegim la quantitat de fitxers
+        int resultCount = read_int32();
+
+        for (int i = 0; i < resultCount; i++) {
+            // Reconstruïm el fitxer
+            int nameLength = read_int32();
+            String name = read_string(nameLength);
+            long size = getDataInputStream().readLong();
+            byte[] hash = read_bytes(32);
+            AresFile file = new AresFile(name, size, hash);
+
+            // Reconstruïm la llista d'usuaris per a aquest fitxer
+            int peerCount = read_int32();
+            java.util.List<String> peers = new java.util.ArrayList<>();
+            for (int j = 0; j < peerCount; j++) {
+                int peerLen = read_int32();
+                peers.add(read_string(peerLen));
+            }
+
+            // Ho ajuntem tot i ho afegim a la llista final
+            results.add(new AresSearchResult(file, peers));
+        }
+        return results;
+    }
 }

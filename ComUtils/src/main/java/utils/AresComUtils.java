@@ -19,6 +19,14 @@ public class AresComUtils extends ComUtils {
     }
 
     /**
+     * Llegeix exclusivament el primer byte d'un missatge per saber de quin tipus és.
+     * Accessible de forma pública per al Server.
+     */
+    public byte readOpcode() throws IOException {
+        return getDataInputStream().readByte();
+    }
+
+    /**
      * MÈTODE D'ESCRIPTURA (El cridarà el Client)
      * Converteix la informació a bytes i l'envia pel socket.
      */
@@ -339,4 +347,91 @@ public class AresComUtils extends ComUtils {
         outFileSize[0] = getDataInputStream().readLong();
         outFileHash[0] = read_bytes(32);
     }
+
+    // --- FASE DE TRANSFERÈNCIA (CHUNKS) I CONTROL ---
+    public static final byte OPCODE_CHUNK_REQUEST = 0x0A;
+    public static final byte OPCODE_CHUNK_RESPONSE = 0x0B;
+    public static final byte OPCODE_HASH_VERIFY = 0x0C;
+    public static final byte OPCODE_ERROR = 0x0D;
+    public static final byte OPCODE_ACK = 0x0E;
+
+    /**
+     * Escriptura 0x0A: Petició d'un fragment concret
+     */
+    public void writeChunkRequest(int transferId, int chunkNumber) throws IOException {
+        getDataOutputStream().writeByte(OPCODE_CHUNK_REQUEST);
+        write_int32(transferId);
+        write_int32(chunkNumber);
+    }
+
+    public void readChunkRequest(int[] outTransferId, int[] outChunkNumber) throws IOException {
+        outTransferId[0] = read_int32();
+        outChunkNumber[0] = read_int32();
+    }
+
+    /**
+     * Escriptura 0x0B: Enviament de les dades del fragment
+     */
+    public void writeChunkResponse(int transferId, int chunkNumber, int chunkSize, byte[] chunkData) throws IOException {
+        getDataOutputStream().writeByte(OPCODE_CHUNK_RESPONSE);
+        write_int32(transferId);
+        write_int32(chunkNumber);
+        write_int32(chunkSize);
+        if (chunkSize > 0 && chunkData != null) {
+            getDataOutputStream().write(chunkData, 0, chunkSize);
+        }
+    }
+
+    public void readChunkResponse(int[] outTransferId, int[] outChunkNumber, int[] outChunkSize, byte[][] outChunkData) throws IOException {
+        outTransferId[0] = read_int32();
+        outChunkNumber[0] = read_int32();
+        outChunkSize[0] = read_int32();
+        if (outChunkSize[0] > 0) {
+            outChunkData[0] = read_bytes(outChunkSize[0]);
+        } else {
+            outChunkData[0] = new byte[0];
+        }
+    }
+
+    /**
+     * Escriptura 0x0C: Verificació del Hash final
+     */
+    public void writeHashVerify(byte[] fileHash) throws IOException {
+        getDataOutputStream().writeByte(OPCODE_HASH_VERIFY);
+        if (fileHash != null && fileHash.length == 32) {
+            getDataOutputStream().write(fileHash, 0, 32);
+        } else {
+            getDataOutputStream().write(new byte[32], 0, 32);
+        }
+    }
+
+    public void readHashVerify(byte[][] outFileHash) throws IOException {
+        outFileHash[0] = read_bytes(32);
+    }
+
+    /**
+     * Escriptura 0x0D: Missatge d'Error
+     */
+    public void writeError(byte errorCode, String errorMessage) throws IOException {
+        getDataOutputStream().writeByte(OPCODE_ERROR);
+        getDataOutputStream().writeByte(errorCode);
+        write_int32(errorMessage.length());
+        write_string(errorMessage);
+    }
+
+    public void readError(byte[] outErrorCode, String[] outErrorMessage) throws IOException {
+        outErrorCode[0] = getDataInputStream().readByte();
+        int len = read_int32();
+        outErrorMessage[0] = read_string(len);
+    }
+
+    /**
+     * Escriptura 0x0E: Confirmació (ACK)
+     */
+    public void writeAck() throws IOException {
+        getDataOutputStream().writeByte(OPCODE_ACK);
+    }
+
+    // El readAck() no fa falta, ja que l'ACK no té payload.
+    // Només es llegeix l'opcode des del codi principal.
 }

@@ -222,4 +222,81 @@ public class AresComUtilsTest {
             file.delete();
         }
     }
+
+
+    @Test
+    public void test_chunk_messages() throws IOException {
+        File file = new File("test_chunks.bin");
+        try {
+            file.createNewFile();
+            AresComUtils aresComUtils = new AresComUtils(new FileInputStream(file), new FileOutputStream(file));
+
+            int expectedTransferId = 8888;
+            int expectedChunkNumber = 5;
+
+            // --- PROVA 0x0A (Petició de fragment) ---
+            aresComUtils.writeChunkRequest(expectedTransferId, expectedChunkNumber);
+            assertEquals(AresComUtils.OPCODE_CHUNK_REQUEST, aresComUtils.getDataInputStream().readByte());
+
+            int[] actualTransferId = new int[1];
+            int[] actualChunkNumber = new int[1];
+            aresComUtils.readChunkRequest(actualTransferId, actualChunkNumber);
+
+            assertEquals(expectedTransferId, actualTransferId[0]);
+            assertEquals(expectedChunkNumber, actualChunkNumber[0]);
+
+            // --- PROVA 0x0B (Enviament de fragment) ---
+            int expectedChunkSize = 4;
+            byte[] expectedData = {10, 20, 30, 40};
+
+            aresComUtils.writeChunkResponse(expectedTransferId, expectedChunkNumber, expectedChunkSize, expectedData);
+            assertEquals(AresComUtils.OPCODE_CHUNK_RESPONSE, aresComUtils.getDataInputStream().readByte());
+
+            int[] actualTransferIdResp = new int[1];
+            int[] actualChunkNumberResp = new int[1];
+            int[] actualChunkSize = new int[1];
+            byte[][] actualData = new byte[1][];
+
+            aresComUtils.readChunkResponse(actualTransferIdResp, actualChunkNumberResp, actualChunkSize, actualData);
+
+            assertEquals(expectedTransferId, actualTransferIdResp[0]);
+            assertEquals(expectedChunkNumber, actualChunkNumberResp[0]);
+            assertEquals(expectedChunkSize, actualChunkSize[0]);
+            assertEquals(expectedData[0], actualData[0][0]);
+            assertEquals(expectedData[3], actualData[0][3]);
+
+        } finally {
+            file.delete();
+        }
+    }
+
+    @Test
+    public void test_control_messages() throws IOException {
+        File file = new File("test_control.bin");
+        try {
+            file.createNewFile();
+            AresComUtils aresComUtils = new AresComUtils(new FileInputStream(file), new FileOutputStream(file));
+
+            // --- PROVA 0x0D (Error) ---
+            byte expectedErrorCode = 0x02; // Fitxer no trobat
+            String expectedErrorMessage = "File not found on disk";
+
+            aresComUtils.writeError(expectedErrorCode, expectedErrorMessage);
+            assertEquals(AresComUtils.OPCODE_ERROR, aresComUtils.getDataInputStream().readByte());
+
+            byte[] actualErrorCode = new byte[1];
+            String[] actualErrorMessage = new String[1];
+
+            aresComUtils.readError(actualErrorCode, actualErrorMessage);
+            assertEquals(expectedErrorCode, actualErrorCode[0]);
+            assertEquals(expectedErrorMessage, actualErrorMessage[0]);
+
+            // --- PROVA 0x0E (ACK) ---
+            aresComUtils.writeAck();
+            assertEquals(AresComUtils.OPCODE_ACK, aresComUtils.getDataInputStream().readByte());
+
+        } finally {
+            file.delete();
+        }
+    }
 }

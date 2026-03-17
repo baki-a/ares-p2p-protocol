@@ -150,7 +150,7 @@ public class Client {
     }
 
     /**
-     * NOU: El Listener que s'executa en segon pla vigilant els missatges entrants.
+     * El Listener que s'executa en segon pla vigilant els missatges entrants.
      */
     private class ServerListener implements Runnable {
         // Variables per guardar l'estat de la descàrrega
@@ -262,8 +262,8 @@ public class Client {
 
     public static void main(String[] args) {
         String host = "localhost";
-        int port = 8181;
-        String nickname = "Origen";
+        int port = 8080;
+        String nickname = "local";
 
         if (args.length >= 3) {
             host = args[0];

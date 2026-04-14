@@ -1,129 +1,30 @@
-# PR1
-Codi base de la PR1 de l'assignatura de Software Distribuït de la UB
+# ARES P2P Protocol | Distributed Software
 
-## Enunciat de pràctiques
+![Java](https://img.shields.io/badge/language-Java-orange.svg)
+![Academic](https://img.shields.io/badge/Academic-University%20Project-blue.svg)
+![Status](https://img.shields.io/badge/status-Completed-green.svg)
 
-Repositori Github a l'[Enunciat de pràctiques](https://github.com/SoftwareDistribuitUB-2026/Enunciat-PR1)
+> **Academic Disclaimer:** This repository contains a university project developed for the Distributed Software / Distributed Systems course. It is an educational proof-of-concept designed to demonstrate the practical implementation of network protocols, socket programming, and concurrent architectures in Java. 
 
-## Com està estructurat el codi
-El codi està estructurat en tres parts:
-- **client**: Conté el codi del client que s'encarrega de fer les peticions al servidor.
-- **server**: Conté el codi del servidor que s'encarrega de rebre les peticions del client i respondre-les.
-- **comUtils**: Conté el codi comú que comparteixen el client i el servidor.
+## Overview
 
+Implementation of a centralized Peer-to-Peer (P2P) file-sharing system based on the **ARES** protocol. This distributed system enables the interconnection of multiple nodes (Clients) through a central routing node (Server) that handles registration, file indexing, and transfer triangulation without storing the files itself.
 
-## Com compilar, encapsular i executar el codi
-Per executar el codi cal tenir instal·lat el JDK de Java. Un cop instal·lat, es pot executar el codi de la següent manera:
+## Key Technical Features
 
-### Servidor
-```bash 
-mvn clean package
-java -jar target/Server-1.0-SNAPSHOT-jar-with-dependencies.jar -p 8080
-```
+- **Multithreaded Architecture:** The server efficiently handles simultaneous connections using independent threads (`ClientHandler`), avoiding bottlenecks in a distributed environment.
+- **Asynchronous Client:** Utilizes a background `ServerListener` thread to keep network listening active without blocking user interaction in the console.
+- **Efficient File Transfer:** Reads and writes files dynamically in 8192-byte chunks. This prevents RAM overflow and system crashes during large file transfers between peers.
+- **Robust Protocol Design:** Full implementation of custom control Opcodes (e.g., `SEARCH_REQUEST`, `CHUNK_RESPONSE`), including a graceful disconnect system (`0x0F`) to free up server resources safely.
+- **Thread-Safety:** Uses concurrent collections (`ConcurrentHashMap`) for the safe management of the global file and user registry across multiple threads.
 
-### Client
+## Technologies Used
 
-```bash 
-mvn clean package
-java -jar target/Client-1.0-SNAPSHOT-jar-with-dependencies.jar -h localhost -p 8080
-```
+- **Language:** Java 17+
+- **Network Communication:** TCP/IP Sockets
+- **Data Structures:** ConcurrentHashMap, Byte Buffers, I/O Streams
+- **Architecture:** Centralized P2P (Tracker-Peer model)
 
-# Memòria de la Pràctica 1
-
-## 1. Resum de les Sessions
-
-### Sessió 1: Fonaments i Utilitats de Comunicació
-En aquesta primera sessió ens vam familiaritzar amb l'arquitectura client-servidor bàsica utilitzant Sockets TCP. L'objectiu principal va ser establir la capa de comunicació de baix nivell, implementant la classe `ComUtils` per garantir una lectura i escriptura precisa de bytes (enters, cadenes de text, etc.) a través de la xarxa, establint les bases per enviar els futurs Opcodes del protocol ARES.
-
-### Sessió 2: Connexió i Registre
-Es va començar a donar forma al protocol. Vam implementar el servidor per acceptar múltiples connexions de manera concurrent mitjançant la creació de fils d'execució (`Threads`) amb la classe `ClientHandler`. Per part del client, es va programar l'inici de sessió, l'enviament del paquet de registre (`CLIENT_REGISTER`) i l'escaneig del directori local `public/` per recopilar la llista de fitxers disponibles.
-
-### Sessió 3: Anunci de Fitxers i Cerca (Thread-Safety)
-L'enfocament es va centrar en la gestió de la informació compartida. Al servidor, vam introduir estructures de dades segures per a fils (`ConcurrentHashMap`) per mantenir el registre global d'usuaris connectats i els seus fitxers sense problemes de condició de carrera. Vam implementar l'enviament del `FILE_ANNOUNCE` des del client i la capacitat de resoldre cerques (`SEARCH_REQUEST`), creuant les dades de tots els usuaris connectats per retornar resultats precisos.
-
-### Sessió 4: Descàrrega per Fragments i Proves Creuades
-Vam implementar l'arquitectura asíncrona al client mitjançant un `ServerListener` en segon pla per poder rebre peticions de descàrrega sense bloquejar la consola. Vam desenvolupar la triangulació al servidor (actuant com a proxy per als missatges d'inici de transferència) i vam programar la lectura i escriptura dinàmica de fitxers al disc dur mitjançant la fragmentació de dades (*Chunks* de 8192 bytes). Finalment, es van realitzar les proves d'interoperabilitat amb altres grups.
-
----
-
-## 2. Problemes Trobats i Solucions Aplicades
-
-Durant el desenvolupament de la pràctica, ens hem enfrontat a diversos reptes tècnics d'arquitectura i xarxes:
-
-* **Bloqueig del fil principal al Client (I/O Blocking):** * *Problema:* El client no podia escoltar peticions entrants (com rebre fragments o respondre a descàrregues d'altres) mentre la consola estava bloquejada esperant un *input* de l'usuari amb el `Scanner`.
-    * *Solució:* Es va dissenyar una classe interna `ServerListener` que s'executa en un `Thread` paral·lel exclusivament per llegir el socket constantment i processar els Opcodes entrants de manera asíncrona.
-* **Corrupció de la canonada TCP (Cascada d'Opcode 0):**
-    * *Problema:* En la fase final de descàrrega, el servidor rebia una infinitat d'errors "Opcode 0 inesperat" i es tancava la connexió temporalment.
-    * *Solució:* Vam detectar que un client enviava el missatge `HASH_VERIFY` (Opcode `0x0C`) amb un payload de 32 bytes, però el servidor no estava programat per llegir-lo. Això deixava 32 zeros atrapats al *buffer* del socket, que el servidor interpretava erròniament com a nous Opcodes. Es va solucionar afegint la lectura buida pertinent al `ClientHandler` per netejar el flux de dades.
-* **Tancaments sobtats per NullPointerException:**
-    * *Problema:* En rebutjar una transferència (enviar status d'error `0x01`), passar una cadena buida `""` com a nom de fitxer provocava excepcions al moment d'escriure els bytes al socket.
-    * *Solució:* Es va estandarditzar retornar sempre el nom original sol·licitat en el paquet de resposta, fins i tot en cas d'error, per mantenir la integritat del format del paquet ARES.
-
----
-
-## 3. Sessió de proves creuades
-
-| Grup | Components                         | Usuari GitHub |
-|------|------------------------------------|---------------|
-| B10  | ANASS BAKI ACHKOUKAR               | baki-a        |
-
-
-### La vostra pràctica
-En aquest apartat cal explicar l'estat inicial de la vostra pràctica:
-
-- __Servidor__
-- [x] El meu __Servidor__ arranca i permet que es connectin __Clients__, assignant-los un identificador.
-- [x] El meu __Servidor__ té implementada la fase de configuració en que els __Clients__ actualitzen la llista de fitxers.
-- [x] El meu __Servidor__ implementa la dinàmica de cerca de fitxers, en la qual els __Clients__ poden fer cerques i obtenen els fitxers que hi encaixen.
-- [x] El meu __Servidor__ implementa la descàrrega de fitxers **amb un client**.
-- [x] El meu __Servidor__ implementa la descàrrega de fitxers **multi-client**.
-
-- __Client__
-- [x] El meu __Client__ es connecta correctament al servidor i s'hi registra.
-- [x] El meu __Client__ té implementada la fase de configuració en que actualitza la llista dels fitxers disponibles.
-- [x] El meu __Client__ implementa la dinàmica de cerca de fitxers, en la qual l'usuari indica un patró de cerca i obté una llista de fitxers disponibles que hi encaixen.
-- [x] El meu __Client__ implementa la dinàmica de transferència de fitxers, enviant els fitxers que se li demanen i rebent els que ha sol·licitat.
-
-**Proves pròpies realitzades:**
-Abans de la sessió, s'ha provat l'arquitectura instanciant 1 Servidor i 2 Clients en local (Origen i Destí). S'ha comprovat correctament l'anunci de fitxers, la cerca creuada i la descàrrega per fragments (Chunks de 8192 bytes) llegint i escrivint de disc dinàmicament sense bloquejar l'execució gràcies a l'ús de fils (ServerListener). També s'ha validat l'enviament final del HASH_VERIFY.
-
-
-### Proves realitzades
-
-Per cada grup que hagueu provat, caldra informar del nom del Grup que s'ha avaluat i la informació bàsica equivalent a la anterior:
-
-**Grup Avaluat: B09**
-
-- __Servidor__
-- [x] El seu __Servidor__ arranca i permet que es connectin __Clients__, assignant-los un identificador.
-- [x] El seu __Servidor__ té implementada la fase de configuració en que els __Clients__ actualitzen la llista de fitxers. * llegir resultats
-- [x] El seu __Servidor__ implementa la dinàmica de cerca de fitxers, en la qual els __Clients__ poden fer cerques i obtenen els fitxers que hi encaixen.
-- [x] El seu __Servidor__ implementa la descàrrega de fitxers **amb un client**.
-- [x] El seu __Servidor__ implementa la descàrrega de fitxers **multi-client**.
-
-- __Client__
-- [x] El seu __Client__ es connecta correctament al servidor i s'hi registra.
-- [x] El seu __Client__ té implementada la fase de configuració en que actualitza la llista dels fitxers disponibles.
-- [x] El seu __Client__ implementa la dinàmica de cerca de fitxers, en la qual l'usuari indica un patró de cerca i obté una llista de fitxers disponibles que hi encaixen.
-- [x] El seu __Client__ implementa la dinàmica de transferència de fitxers, enviant els fitxers que se li demanen i rebent els que ha sol·licitat.
-
-**Resultats de les proves i errors detectats:**
-El seu servidor es queda penjat al fer un ANNOUNCE, cosa que el meu client fa automàticament al connectar-se. Per provar altres funcions, s'ha provat sense fer cap announce les altres feature, que semblen estar correctament implementades.
-
-
-**Grup Avaluat: C04**
-- __Servidor__
-- [x] El seu __Servidor__ arranca i permet que es connectin __Clients__, assignant-los un identificador.
-- [ ] El seu __Servidor__ té implementada la fase de configuració en que els __Clients__ actualitzen la llista de fitxers.
-- [ ] El seu __Servidor__ implementa la dinàmica de cerca de fitxers, en la qual els __Clients__ poden fer cerques i obtenen els fitxers que hi encaixen.
-- [ ] El seu __Servidor__ implementa la descàrrega de fitxers **amb un client**.
-- [ ] El seu __Servidor__ implementa la descàrrega de fitxers **multi-client**.
-
-- __Client__
-- [x] El seu __Client__ es connecta correctament al servidor i s'hi registra.
-- [ ] El seu __Client__ té implementada la fase de configuració en que actualitza la llista dels fitxers disponibles.
-- [ ] El seu __Client__ implementa la dinàmica de cerca de fitxers, en la qual l'usuari indica un patró de cerca i obté una llista de fitxers disponibles que hi encaixen.
-- [ ] El seu __Client__ implementa la dinàmica de transferència de fitxers, enviant els fitxers que se li demanen i rebent els que ha sol·licitat.
-
-- **NOTA:** El grup que em tocava avaluar ha estat ocupat durant tota la sessió, per la qual cosa he avaluat el grup C04.
-- **Errors:** El grup C04 li arrancava el servidor i podia connectar-me. Malauradament, instantàniament em desconnectava, impossibilitant fer més proves.
+## Credits
+- **Original Assignment Repository:** [SoftwareDistribuitUB-2026/Enunciat-PR1](https://github.com/SoftwareDistribuitUB-2026/Enunciat-PR1)
+Universitat de Barcelona

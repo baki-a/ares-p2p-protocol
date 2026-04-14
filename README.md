@@ -27,4 +27,4 @@ Implementation of a centralized Peer-to-Peer (P2P) file-sharing system based on 
 
 ## Credits
 - **Original Assignment Repository:** [SoftwareDistribuitUB-2026/Enunciat-PR1](https://github.com/SoftwareDistribuitUB-2026/Enunciat-PR1)
-Universitat de Barcelona
+- Universitat de Barcelona
